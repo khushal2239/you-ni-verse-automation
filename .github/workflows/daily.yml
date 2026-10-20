@@ -1,0 +1,82 @@
+
+name: You-ni-verse Daily Hindi Script
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 2 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  generate-script:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Generate Hindi Short script
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          python - <<'PY'
+          import os, json, urllib.request
+          from datetime import datetime, timezone
+
+          key = os.environ["GEMINI_API_KEY"]
+          url = (
+              "https://generativelanguage.googleapis.com/v1beta/"
+              "models/gemini-2.5-flash:generateContent?key=" + key
+          )
+
+          prompt = """
+          Create one original 35-45 second YouTube Shorts script in natural Hindi
+          for Indian viewers, written in Devanagari.
+          Channel: You-ni-verse.
+          Style: premium science documentary, cinematic, suspenseful, logical.
+          Topic: choose one interesting science mystery or verified fact.
+          Output: a powerful 2-second hook, narration, visual suggestions,
+          on-screen captions, and sources to verify.
+          Never invent facts or present speculation as truth.
+          Mark any claim that needs verification before publishing.
+          Do not copy existing creators' scripts.
+          """
+
+          body = {
+              "contents": [{"parts": [{"text": prompt}]}],
+              "generationConfig": {"temperature": 0.8}
+          }
+          req = urllib.request.Request(
+              url,
+              data=json.dumps(body).encode(),
+              headers={"Content-Type": "application/json"},
+              method="POST"
+          )
+
+          with urllib.request.urlopen(req, timeout=90) as response:
+              result = json.loads(response.read())
+
+          text = result["candidates"][0]["content"]["parts"][0]["text"]
+          os.makedirs("scripts", exist_ok=True)
+          with open("scripts/latest.md", "w", encoding="utf-8") as f:
+              f.write("# You-ni-verse — Hindi Short\n\n")
+              f.write("Generated: " + datetime.now(timezone.utc).isoformat() + "\n\n")
+              f.write(text + "\n")
+
+          print("Script created successfully.")
+          PY
+
+      - name: Save generated script
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/latest.md
+          git diff --cached --quiet || git commit -m "Generate daily Hindi Short script"
+          git push
+          
